@@ -2,6 +2,7 @@
 SolarPulse - Module D: Revenue Intelligence
 Enterprise financial analytics, multi-tier electricity tariffs, revenue shortfalls,
 invoiced vs collected projections, tariff sensitivity simulation, and financial reports.
+Supports active data source filtering (SIMULATED, UPLOADED, API_LIVE).
 """
 
 import streamlit as st
@@ -9,11 +10,12 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from database.operations import load_generation_dataframe, get_all_plants
+from database.operations import load_generation_dataframe
 from core.revenue_engine import RevenueEngine
-from components.charts import style_figure, CHART_THEME
+from components.charts import style_figure, get_chart_theme
 
-def render_revenue_page(selected_plant: str, start_date, end_date):
+def render_revenue_page(selected_plant: str, start_date, end_date, active_mode: str = "SIMULATED"):
+    theme = get_chart_theme()
     st.markdown(
         """
         <div class="sp-header-container">
@@ -30,22 +32,14 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
     )
 
     plant_filter = None if selected_plant == "ALL" else selected_plant
-    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date)
+    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source=active_mode)
 
     if df.empty:
-        st.warning("No records found for the selected filters.")
+        st.warning(f"No records found for active mode: **{active_mode}**. Switch mode or upload data to analyze.")
         return
 
     # 1. Tariff Configuration Panel
     with st.expander("⚙️ Interactive Tariff & PPA Configuration"):
-        st.markdown(
-            """
-            <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.75rem;">
-                Adjust PPA feed-in tariffs, captive industrial self-consumption rates, and expected collection efficiency.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
         tc1, tc2, tc3 = st.columns(3)
         with tc1:
             cfg_export_tariff = st.number_input("Grid Export PPA Tariff (₹/kWh)", min_value=1.5, max_value=8.0, value=3.20, step=0.05)
@@ -54,7 +48,6 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
         with tc3:
             cfg_collection_rate = st.slider("Historical Collection Efficiency (%)", min_value=80.0, max_value=100.0, value=96.5, step=0.5)
 
-    # Initialize Revenue Engine with configured tariffs
     engine = RevenueEngine(default_export_tariff=cfg_export_tariff, default_self_tariff=cfg_self_tariff)
     df = engine.calculate_revenue_for_dataframe(df)
     fin_summary = engine.summarize_financials(df, collection_rate=cfg_collection_rate / 100.0)
@@ -76,7 +69,6 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
     # 3. Revenue Breakdown: Export vs Self Consumption
     col_chart1, col_chart2 = st.columns([1.4, 1.0])
     with col_chart1:
-        # Monthly revenue progression
         df["month_str"] = df["timestamp"].dt.strftime("%Y-%m")
         monthly_fin = df.groupby("month_str").agg({
             "estimated_export_revenue_inr": "sum",
@@ -90,21 +82,21 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
             x=monthly_fin["month_str"],
             y=monthly_fin["estimated_export_revenue_inr"],
             name="Grid Export Revenue (₹)",
-            marker_color=CHART_THEME["sky"],
+            marker_color=theme["sky"],
             hovertemplate="Export: ₹%{y:,.0f}<extra></extra>"
         ))
         fig_rev.add_trace(go.Bar(
             x=monthly_fin["month_str"],
             y=monthly_fin["estimated_self_revenue_inr"],
             name="Self-Consumption Offset (₹)",
-            marker_color=CHART_THEME["mint"],
+            marker_color=theme["mint"],
             hovertemplate="Self-Use: ₹%{y:,.0f}<extra></extra>"
         ))
         fig_rev.add_trace(go.Scatter(
             x=monthly_fin["month_str"],
             y=monthly_fin["expected_revenue_inr"],
             name="Target Expected Revenue",
-            line={"color": CHART_THEME["rose"], "dash": "dot", "width": 2},
+            line={"color": theme["rose"], "dash": "dot", "width": 2},
             hovertemplate="Target: ₹%{y:,.0f}<extra></extra>"
         ))
 
@@ -113,7 +105,6 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
         st.plotly_chart(fig_rev, use_container_width=True)
 
     with col_chart2:
-        # Donut of Revenue Streams
         fig_donut = px.pie(
             names=["Grid Export PPA", "Captive Self-Consumption", "Monetized Shortfall Loss"],
             values=[
@@ -123,12 +114,9 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
             ],
             hole=0.5,
             title="Portfolio Financial Realization & Loss Share",
-            color_discrete_sequence=[CHART_THEME["sky"], CHART_THEME["mint"], CHART_THEME["rose"]]
+            color_discrete_sequence=[theme["sky"], theme["mint"], theme["rose"]]
         )
-        fig_donut.update_layout(
-            paper_bgcolor=CHART_THEME["paper_bgcolor"],
-            font={"color": CHART_THEME["font_color"]}
-        )
+        fig_donut = style_figure(fig_donut, "Financial Realization & Loss Share", height=340)
         st.plotly_chart(fig_donut, use_container_width=True)
 
     # 4. Plant-Wise Financial Comparison
@@ -146,25 +134,13 @@ def render_revenue_page(selected_plant: str, start_date, end_date):
             y=["total_estimated_revenue_inr", "revenue_shortfall_inr"],
             barmode="group",
             title="Revenue Realized vs Shortfall by Solar Asset",
-            color_discrete_sequence=[CHART_THEME["emerald"], CHART_THEME["rose"]],
+            color_discrete_sequence=[theme["emerald"], theme["rose"]],
             labels={"value": "Amount (₹)", "variable": "Financial Metric"}
         )
-        fig_pbar.update_layout(
-            paper_bgcolor=CHART_THEME["paper_bgcolor"],
-            plot_bgcolor=CHART_THEME["plot_bgcolor"],
-            font={"color": CHART_THEME["font_color"]}
-        )
+        fig_pbar = style_figure(fig_pbar, "Revenue Realized vs Shortfall by Asset", "Asset", "Amount (₹)", height=320)
         st.plotly_chart(fig_pbar, use_container_width=True)
 
     # 5. Tariff Sensitivity Analysis
     st.markdown("### 📈 Tariff Sensitivity Matrix")
-    st.markdown(
-        """
-        <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.75rem;">
-            Stress-tests portfolio bottom line against renegotiated PPA tariffs, merchant market fluctuations, and indexation rates.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
     sens_df = engine.simulate_tariff_sensitivity(df)
     st.dataframe(sens_df, use_container_width=True)

@@ -1,27 +1,43 @@
-/* SolarPulse Enterprise Theme: Renewable Energy Charcoal & Deep Green Aesthetic */
+/* SolarPulse Enterprise Theme: Adaptive Dark & Light Support */
+
 :root {
-    --bg-primary: #0d1312;
-    --bg-secondary: #131c1a;
-    --bg-card: #182321;
-    --bg-card-hover: #1f2d2a;
-    --border-color: #273834;
-    --border-highlight: #10b981;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --accent-emerald: #10b981;
-    --accent-mint: #34d399;
-    --accent-amber: #f59e0b;
-    --accent-rose: #f43f5e;
-    --accent-sky: #0ea5e9;
-    --gradient-card: linear-gradient(135deg, rgba(24, 35, 33, 0.95) 0%, rgba(19, 28, 26, 0.95) 100%);
-    --gradient-accent: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    --sp-bg-primary: #0d1312;
+    --sp-bg-secondary: #131c1a;
+    --sp-bg-card: #182321;
+    --sp-bg-card-hover: #1f2d2a;
+    --sp-border-color: #273834;
+    --sp-border-highlight: #10b981;
+    --sp-text-primary: #f8fafc;
+    --sp-text-secondary: #94a3b8;
+    --sp-text-muted: #64748b;
+    --sp-accent-emerald: #10b981;
+    --sp-accent-mint: #34d399;
+    --sp-accent-amber: #f59e0b;
+    --sp-accent-rose: #f43f5e;
+    --sp-accent-sky: #0ea5e9;
+    --sp-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Light Mode Overrides when browser or Streamlit theme is set to light */
+@media (prefers-color-scheme: light) {
+    :root {
+        --sp-bg-primary: #f8fafc;
+        --sp-bg-secondary: #f1f5f9;
+        --sp-bg-card: #ffffff;
+        --sp-bg-card-hover: #f8fafc;
+        --sp-border-color: #cbd5e1;
+        --sp-border-highlight: #059669;
+        --sp-text-primary: #0f172a;
+        --sp-text-secondary: #334155;
+        --sp-text-muted: #64748b;
+        --sp-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
 }
 
 /* Global Container Styling */
 .main .block-container {
-    padding-top: 2rem !important;
-    padding-bottom: 3rem !important;
+    padding-top: 1.75rem !important;
+    padding-bottom: 2.5rem !important;
     max-width: 96% !important;
 }
 
@@ -31,36 +47,37 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.25rem 1.75rem;
-    background: linear-gradient(135deg, #111a18 0%, #152420 100%);
-    border: 1px solid #233530;
+    background: var(--sp-bg-card);
+    border: 1px solid var(--sp-border-color);
     border-radius: 12px;
     margin-bottom: 1.5rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--sp-card-shadow);
 }
 
 .sp-header-title {
-    font-size: 1.75rem;
+    font-size: 1.65rem;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--sp-text-primary);
     margin: 0;
     letter-spacing: -0.02em;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
 }
 
 .sp-header-subtitle {
-    font-size: 0.875rem;
-    color: #94a3b8;
+    font-size: 0.85rem;
+    color: var(--sp-text-secondary);
     margin-top: 0.25rem;
 }
 
+/* Badges */
 .sp-badge {
     display: inline-flex;
     align-items: center;
     padding: 0.25rem 0.65rem;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 700;
     border-radius: 9999px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -69,43 +86,83 @@
 .sp-badge-simulated {
     background: rgba(245, 158, 11, 0.15);
     color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.sp-badge-uploaded {
+    background: rgba(14, 165, 233, 0.15);
+    color: #0ea5e9;
+    border: 1px solid rgba(14, 165, 233, 0.35);
 }
 
 .sp-badge-live {
     background: rgba(16, 185, 129, 0.15);
     color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.sp-badge-unconfigured {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.35);
 }
 
 .sp-badge-warning {
     background: rgba(244, 63, 94, 0.15);
     color: #f43f5e;
-    border: 1px solid rgba(244, 63, 94, 0.3);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+}
+
+/* Three-Mode Landing Cards */
+.sp-mode-card {
+    background: var(--sp-bg-card);
+    border: 1px solid var(--sp-border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    transition: all 0.2s ease-in-out;
+    box-shadow: var(--sp-card-shadow);
+}
+
+.sp-mode-card:hover {
+    border-color: var(--sp-border-highlight);
+    transform: translateY(-2px);
+}
+
+.sp-mode-card.active {
+    border: 2px solid var(--sp-accent-emerald);
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.sp-mode-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--sp-text-primary);
+    margin-bottom: 0.3rem;
+}
+
+.sp-mode-desc {
+    font-size: 0.825rem;
+    color: var(--sp-text-secondary);
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
 }
 
 /* KPI Card Grid */
-.sp-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
 .sp-kpi-card {
-    background: var(--gradient-card);
-    border: 1px solid var(--border-color);
+    background: var(--sp-bg-card);
+    border: 1px solid var(--sp-border-color);
     border-radius: 10px;
-    padding: 1.2rem;
+    padding: 1.15rem;
     transition: all 0.2s ease-in-out;
     position: relative;
     overflow: hidden;
+    box-shadow: var(--sp-card-shadow);
 }
 
 .sp-kpi-card:hover {
-    border-color: #3b534d;
+    border-color: var(--sp-border-highlight);
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .sp-kpi-card::before {
@@ -115,34 +172,34 @@
     left: 0;
     width: 4px;
     height: 100%;
-    background: var(--accent-emerald);
+    background: var(--sp-accent-emerald);
 }
 
 .sp-kpi-card.warning::before {
-    background: var(--accent-rose);
+    background: var(--sp-accent-rose);
 }
 
 .sp-kpi-card.amber::before {
-    background: var(--accent-amber);
+    background: var(--sp-accent-amber);
 }
 
 .sp-kpi-card.sky::before {
-    background: var(--accent-sky);
+    background: var(--sp-accent-sky);
 }
 
 .sp-kpi-label {
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.78rem;
+    font-weight: 600;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: var(--sp-text-secondary);
     letter-spacing: 0.04em;
     margin-bottom: 0.35rem;
 }
 
 .sp-kpi-value {
-    font-size: 1.65rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--sp-text-primary);
     letter-spacing: -0.02em;
     line-height: 1.2;
 }
@@ -155,44 +212,34 @@
     gap: 0.3rem;
 }
 
-.sp-delta-positive {
-    color: #34d399;
-}
+.sp-delta-positive { color: #10b981; }
+.sp-delta-negative { color: #f43f5e; }
+.sp-delta-neutral { color: var(--sp-text-muted); }
 
-.sp-delta-negative {
-    color: #f87171;
-}
-
-.sp-delta-neutral {
-    color: #94a3b8;
-}
-
-/* Module Section Container */
+/* Section Box */
 .sp-section-box {
-    background: #141f1c;
-    border: 1px solid #233631;
+    background: var(--sp-bg-card);
+    border: 1px solid var(--sp-border-color);
     border-radius: 10px;
     padding: 1.25rem;
     margin-bottom: 1.25rem;
+    box-shadow: var(--sp-card-shadow);
 }
 
 .sp-section-title {
     font-size: 1.15rem;
     font-weight: 600;
-    color: #f1f5f9;
+    color: var(--sp-text-primary);
     margin-bottom: 0.25rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
 }
 
 .sp-section-desc {
     font-size: 0.825rem;
-    color: #94a3b8;
-    margin-bottom: 1rem;
+    color: var(--sp-text-secondary);
+    margin-bottom: 0.75rem;
 }
 
-/* Custom Table / Alert Box */
+/* Alert Boxes */
 .sp-alert-box {
     padding: 0.85rem 1.15rem;
     border-radius: 8px;
@@ -206,28 +253,23 @@
 .sp-alert-critical {
     background: rgba(244, 63, 94, 0.1);
     border: 1px solid rgba(244, 63, 94, 0.3);
-    color: #fecdd3;
+    color: #e11d48;
 }
 
 .sp-alert-warning {
     background: rgba(245, 158, 11, 0.1);
     border: 1px solid rgba(245, 158, 11, 0.3);
-    color: #fef3c7;
+    color: #d97706;
 }
 
 .sp-alert-info {
     background: rgba(14, 165, 233, 0.1);
     border: 1px solid rgba(14, 165, 233, 0.3);
-    color: #bae6fd;
+    color: #0284c7;
 }
 
 .sp-alert-success {
     background: rgba(16, 185, 129, 0.1);
     border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #d1fae5;
-}
-
-/* Clean Form inputs & Buttons */
-div[data-testid="stMetricValue"] {
-    font-size: 1.6rem !important;
+    color: #059669;
 }

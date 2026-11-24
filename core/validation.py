@@ -1,6 +1,7 @@
 """
 SolarPulse Data Validation & Cleansing
 Flexible schema mapping, duplicate detection, and missing-value handling for solar CSVs/Excels.
+Supports multiple plants, multiple inverters, 15-minute intervals, and preserves data_source = 'UPLOADED'.
 """
 
 import pandas as pd
@@ -9,18 +10,23 @@ from typing import Dict, Tuple, List, Any
 
 # Standard expected schema mapping aliases
 COLUMN_SYNONYMS = {
-    "timestamp": ["timestamp", "date", "datetime", "record_date", "time", "reading_date"],
+    "timestamp": ["timestamp", "date", "datetime", "record_date", "time", "reading_date", "date_time"],
     "plant_id": ["plant_id", "plantid", "plantcode", "plant_code", "station_id", "site_id", "site_code"],
     "plant_name": ["plant_name", "plant", "site_name", "facility_name", "station_name"],
+    "inverter_id": ["inverter_id", "inverter", "inverter_name", "inv_id", "inverter_code", "inverter_no", "inv", "string_id"],
     "actual_generation_kwh": [
         "actual_generation_kwh", "actual_kwh", "actual_generation", "generation_kwh",
-        "energy_kwh", "actual_energy", "kwh_generated", "power_generated_kwh"
+        "energy_kwh", "actual_energy", "kwh_generated", "power_generated_kwh", "yield_kwh"
     ],
     "expected_generation_kwh": [
         "expected_generation_kwh", "expected_kwh", "expected_generation", "predicted_kwh",
         "budget_kwh", "target_kwh", "modeled_kwh", "theoretical_kwh"
     ],
-    "power_kw": ["power_kw", "peak_kw", "power", "kw", "active_power_kw"],
+    "power_kw": ["power_kw", "peak_kw", "power", "kw", "active_power_kw", "ac_power_kw", "ac_power"],
+    "dc_power_kw": ["dc_power_kw", "dc_power", "dc_kw", "pv_power_kw", "dc_input_power", "array_power_kw"],
+    "ac_voltage_v": ["ac_voltage_v", "voltage_v", "voltage", "ac_voltage", "grid_voltage_v", "grid_voltage", "volts"],
+    "dc_voltage_v": ["dc_voltage_v", "dc_voltage", "v_dc", "mppt_voltage", "array_voltage"],
+    "current_a": ["current_a", "current", "ac_current", "amperes", "amps"],
     "temperature_c": ["temperature_c", "temp_c", "temperature", "ambient_temp", "ambient_temperature"],
     "module_temperature_c": ["module_temperature_c", "module_temp", "cell_temp", "panel_temp"],
     "irradiance_wm2": ["irradiance_wm2", "irradiance", "ghi", "poa", "solar_radiation", "ghi_wm2"],
@@ -54,10 +60,12 @@ def map_and_standardize_columns(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[st
 
     df = df.rename(columns=rename_map)
 
-    # Required columns for core analytics
-    required_cols = ["timestamp", "actual_generation_kwh"]
-    missing = [c for c in required_cols if c not in df.columns]
+    # Required columns: timestamp and at least actual generation or power
+    required_cols = ["timestamp"]
+    if "actual_generation_kwh" not in df.columns and "power_kw" not in df.columns:
+        required_cols.append("actual_generation_kwh")
 
+    missing = [c for c in required_cols if c not in df.columns]
     return df, rename_map, missing
 
 def clean_and_validate_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
@@ -71,7 +79,10 @@ def clean_and_validate_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str
         "null_counts": {},
         "imputed_columns": [],
         "warnings": [],
-        "is_valid": True
+        "is_valid": True,
+        "is_interval_15m": False,
+        "plants_found": [],
+        "inverters_found": []
     }
 
     if df.empty:
@@ -99,13 +110,12 @@ def clean_and_validate_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str
         summary["warnings"].append(f"Date parsing failed: {str(e)}")
         return df, summary
 
-    # Check and remove exact or key duplicates
-    key_cols = ["plant_id", "timestamp"] if "plant_id" in df.columns else ["timestamp"]
-    initial_len = len(df)
-    df = df.drop_duplicates(subset=key_cols, keep="last")
-    summary["duplicate_rows_dropped"] = initial_len - len(df)
+    # If power_kw is given but actual_generation_kwh is missing, estimate generation based on time delta
+    if "actual_generation_kwh" not in df.columns and "power_kw" in df.columns:
+        df["actual_generation_kwh"] = df["power_kw"].fillna(0.0) * 0.25 # assume 15-min blocks
+        summary["imputed_columns"].append("actual_generation_kwh (derived from power_kw * 0.25h)")
 
-    # Impute or synthesize missing plant_id / plant_name
+    # Check and remove exact duplicates based on [plant_id, inverter_id, timestamp]
     if "plant_id" not in df.columns:
         df["plant_id"] = "SP-UPLOAD"
         df["plant_name"] = "Uploaded Plant"
@@ -113,11 +123,32 @@ def clean_and_validate_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str
     elif "plant_name" not in df.columns:
         df["plant_name"] = df["plant_id"].apply(lambda x: f"Plant {x}")
 
+    if "inverter_id" not in df.columns:
+        df["inverter_id"] = "CENTRAL"
+        summary["imputed_columns"].append("inverter_id (defaulted to CENTRAL)")
+
+    key_cols = ["plant_id", "inverter_id", "timestamp"]
+    initial_len = len(df)
+    df = df.drop_duplicates(subset=key_cols, keep="last")
+    summary["duplicate_rows_dropped"] = initial_len - len(df)
+
+    # Detect interval frequency (e.g. 15-minute vs daily)
+    if len(df) > 1:
+        time_diffs = df.sort_values("timestamp")["timestamp"].diff().dropna()
+        if not time_diffs.empty:
+            median_diff_min = time_diffs.dt.total_seconds().median() / 60.0
+            if median_diff_min <= 60.0:
+                summary["is_interval_15m"] = True
+                df["is_interval_15m"] = True
+            else:
+                df["is_interval_15m"] = False
+
     # Numeric sanitization
     numeric_cols = [
-        "actual_generation_kwh", "expected_generation_kwh", "power_kw",
-        "temperature_c", "irradiance_wm2", "rainfall_mm", "grid_export_kwh",
-        "self_consumption_kwh", "curtailed_energy_kwh", "tariff_inr_per_kwh"
+        "actual_generation_kwh", "expected_generation_kwh", "power_kw", "dc_power_kw",
+        "ac_voltage_v", "dc_voltage_v", "current_a",
+        "temperature_c", "module_temperature_c", "irradiance_wm2", "rainfall_mm",
+        "grid_export_kwh", "self_consumption_kwh", "curtailed_energy_kwh", "tariff_inr_per_kwh"
     ]
 
     for col in numeric_cols:
@@ -126,20 +157,19 @@ def clean_and_validate_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str
             null_count = int(df[col].isna().sum())
             if null_count > 0:
                 summary["null_counts"][col] = null_count
-                # Impute reasonable defaults
-                if col in ["actual_generation_kwh", "expected_generation_kwh"]:
+                if col in ["actual_generation_kwh", "expected_generation_kwh", "power_kw", "dc_power_kw"]:
                     df[col] = df[col].fillna(0.0)
                 elif col in ["rainfall_mm", "curtailed_energy_kwh"]:
                     df[col] = df[col].fillna(0.0)
                 elif col == "tariff_inr_per_kwh":
                     df[col] = df[col].fillna(3.20)
                 elif col == "temperature_c":
-                    df[col] = df[col].fillna(df[col].median() if not df[col].dropna().empty else 28.0)
+                    df[col] = df[col].fillna(28.0)
                 elif col == "irradiance_wm2":
-                    df[col] = df[col].fillna(df[col].median() if not df[col].dropna().empty else 800.0)
+                    df[col] = df[col].fillna(800.0)
                 summary["imputed_columns"].append(col)
 
-    # If expected_generation_kwh is missing, construct benchmark expected based on actual median
+    # Modeled expected generation benchmark if missing
     if "expected_generation_kwh" not in df.columns:
         mean_actual = df["actual_generation_kwh"].mean()
         df["expected_generation_kwh"] = df["actual_generation_kwh"].apply(
@@ -147,17 +177,31 @@ def clean_and_validate_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str
         )
         summary["imputed_columns"].append("expected_generation_kwh (modeled +8% benchmark)")
 
+    if "power_kw" not in df.columns:
+        is_15m = bool(df["is_interval_15m"].any()) if "is_interval_15m" in df.columns else False
+        df["power_kw"] = df["actual_generation_kwh"] * 4.0 if is_15m else df["actual_generation_kwh"] / 7.5
+    if "dc_power_kw" not in df.columns:
+        df["dc_power_kw"] = df["power_kw"] / 0.98
+    if "ac_voltage_v" not in df.columns:
+        df["ac_voltage_v"] = 415.0
     if "grid_export_kwh" not in df.columns:
         df["grid_export_kwh"] = df["actual_generation_kwh"] * 0.85
     if "self_consumption_kwh" not in df.columns:
         df["self_consumption_kwh"] = df["actual_generation_kwh"] - df["grid_export_kwh"]
+    if "curtailed_energy_kwh" not in df.columns:
+        df["curtailed_energy_kwh"] = 0.0
     if "tariff_inr_per_kwh" not in df.columns:
         df["tariff_inr_per_kwh"] = 3.20
     if "inverter_status" not in df.columns:
         df["inverter_status"] = "Normal"
+    if "comm_status" not in df.columns:
+        df["comm_status"] = "ONLINE"
     if "soiling_ratio" not in df.columns:
         df["soiling_ratio"] = 0.96
 
     df["data_source"] = "UPLOADED"
+
     summary["final_rows"] = len(df)
+    summary["plants_found"] = list(df["plant_id"].unique())
+    summary["inverters_found"] = list(df["inverter_id"].unique())
     return df, summary

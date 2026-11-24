@@ -1,37 +1,73 @@
 """
-SolarPulse Sidebar & Global Filter Component
+SolarPulse Sidebar & 3-Mode Data Source Selector Component
+Provides seamless switching between:
+1. SIMULATED (Sample Data Mode)
+2. UPLOADED (Upload Data Mode)
+3. API_LIVE (Connect Inverter Mode)
 """
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from database.operations import get_all_plants
+from database.operations import get_all_plants, get_available_data_sources, reset_and_reload_sample_data
 
 def render_sidebar():
     """
-    Renders enterprise header in sidebar with plant selector, date filter,
-    data source badge, and last updated timestamp.
-    Returns: (selected_plant_id, start_date, end_date)
+    Renders enterprise header, 3-mode data source selector, plant filter,
+    date filter, and data status indicator.
+    Returns: (selected_plant_id, start_date, end_date, active_mode)
     """
     with st.sidebar:
         st.markdown(
             """
-            <div style="padding: 0.5rem 0 1.25rem 0;">
+            <div style="padding: 0.25rem 0 1rem 0;">
                 <div style="display:flex; align-items:center; gap: 0.6rem;">
                     <span style="font-size: 1.6rem; color: #10b981;">⚡</span>
-                    <span style="font-size: 1.4rem; font-weight: 800; letter-spacing: -0.03em; color: #f8fafc;">SolarPulse</span>
+                    <span style="font-size: 1.4rem; font-weight: 800; letter-spacing: -0.03em;">SolarPulse</span>
                 </div>
-                <div style="font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-top: 0.2rem;">
-                    Solar Analytics & Revenue Intelligence
+                <div style="font-size: 0.75rem; color: var(--sp-text-secondary); font-weight: 500; margin-top: 0.15rem;">
+                    AI Solar Analytics & Revenue Intelligence
                 </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown("### Operational Scope")
-        
-        # Load available plants
+        # 1. Three-Mode Data Source Selector
+        st.markdown("### 📡 Data Source Mode")
+        source_counts = get_available_data_sources()
+
+        mode_options = {
+            "SIMULATED": f"🚀 Sample Data ({source_counts.get('SIMULATED', 0):,} rec)",
+            "UPLOADED": f"📥 Uploaded Data ({source_counts.get('UPLOADED', 0):,} rec)",
+            "API_LIVE": f"🔌 Inverter Gateway ({source_counts.get('API_LIVE', 0)} rec)"
+        }
+
+        # Initialize session state if not set
+        if "data_source_mode" not in st.session_state:
+            st.session_state["data_source_mode"] = "SIMULATED"
+
+        selected_mode = st.radio(
+            "Select Data Mode",
+            options=["SIMULATED", "UPLOADED", "API_LIVE"],
+            format_func=lambda x: mode_options[x],
+            index=["SIMULATED", "UPLOADED", "API_LIVE"].index(st.session_state["data_source_mode"]),
+            key="sb_data_source_radio"
+        )
+        st.session_state["data_source_mode"] = selected_mode
+
+        # Reset / Reload Sample Data Button if in SIMULATED mode
+        if selected_mode == "SIMULATED":
+            if st.button("🔄 Reload / Reset Sample Data", use_container_width=True, help="Refreshes multi-plant and 15-minute interval sample datasets in SQLite"):
+                with st.spinner("Regenerating physics-based multi-plant dataset..."):
+                    reloaded = reset_and_reload_sample_data()
+                    st.success(f"Reloaded {reloaded:,} sample records!")
+                    st.rerun()
+
+        st.markdown("---")
+
+        # 2. Plant / Asset Scope
+        st.markdown("### Asset Scope")
         all_plants = get_all_plants()
         plant_options = {"ALL": "🌐 All Plants Portfolio (195 MW)"}
         for p in all_plants:
@@ -44,10 +80,8 @@ def render_sidebar():
             index=0
         )
 
-        st.markdown("---")
-        st.markdown("### Reporting Period")
-
-        # Date range picker
+        # 3. Reporting Horizon
+        st.markdown("### Reporting Horizon")
         min_date = date(2025, 1, 1)
         max_date = date(2025, 12, 31)
 
@@ -66,33 +100,53 @@ def render_sidebar():
             start_date, end_date = min_date, max_date
 
         st.markdown("---")
-        
-        # Data source indicator
-        st.markdown(
-            """
-            <div style="background: rgba(24, 35, 33, 0.8); border: 1px solid #233631; border-radius: 8px; padding: 0.85rem; margin-top: 0.5rem;">
-                <div style="font-size: 0.72rem; text-transform: uppercase; color: #94a3b8; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.35rem;">
-                    Data Source Status
-                </div>
-                <div style="display:flex; align-items:center; justify-content:space-between;">
+
+        # 4. Visible Data Source Indicator Badge
+        if selected_mode == "SIMULATED":
+            badge_html = """
+            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.85rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span class="sp-badge sp-badge-simulated">SIMULATED DATASET</span>
-                    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981;"></span>
+                    <span style="font-size:0.75rem;">☀️</span>
                 </div>
-                <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.5rem; line-height: 1.3;">
-                    Physics-modeled irradiance & weather data for portfolio demonstration.
+                <div style="font-size: 0.72rem; color: var(--sp-text-secondary); margin-top: 0.4rem; line-height: 1.35;">
+                    Realistic synthetic multi-plant data with 15-min inverter telemetry. <i>Clearly labeled as simulated.</i>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+            """
+        elif selected_mode == "UPLOADED":
+            badge_html = """
+            <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 8px; padding: 0.85rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="sp-badge sp-badge-uploaded">UPLOADED DATASET</span>
+                    <span style="font-size:0.75rem;">📥</span>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--sp-text-secondary); margin-top: 0.4rem; line-height: 1.35;">
+                    User-imported CSV / Excel operational generation dataset.
+                </div>
+            </div>
+            """
+        else:
+            badge_html = """
+            <div style="background: rgba(100, 116, 139, 0.08); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 8px; padding: 0.85rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="sp-badge sp-badge-unconfigured">NOT CONFIGURED</span>
+                    <span style="font-size:0.75rem;">🔌</span>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--sp-text-secondary); margin-top: 0.4rem; line-height: 1.35;">
+                    Live SCADA API gateway. Configure vendor keys in the <b>Connect Inverter</b> tab to activate.
+                </div>
+            </div>
+            """
+        st.markdown(badge_html, unsafe_allow_html=True)
 
         st.markdown(
             f"""
-            <div style="font-size: 0.7rem; color: #64748b; margin-top: 1.5rem; text-align: center;">
-                Engine v2.4 • Last Refresh: {datetime.now().strftime('%H:%M:%S IST')}
+            <div style="font-size: 0.7rem; color: var(--sp-text-muted); margin-top: 1.25rem; text-align: center;">
+                SolarPulse Enterprise v2.5 • {datetime.now().strftime('%H:%M:%S IST')}
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        return selected_plant_key, start_date, end_date
+        return selected_plant_key, start_date, end_date, selected_mode

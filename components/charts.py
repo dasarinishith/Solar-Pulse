@@ -1,61 +1,90 @@
 """
 SolarPulse Chart Library
-Enterprise-grade Plotly visualisations styled for dark renewable aesthetic.
+Theme-adaptive (Dark & Light) Plotly visualisations styled for enterprise SaaS aesthetic.
+Supports diurnal 15-minute interval power curves, multi-inverter comparisons,
+and macro financial/generation trends.
 """
 
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
+import streamlit as st
 
-CHART_THEME = {
-    "paper_bgcolor": "#131c1a",
-    "plot_bgcolor": "#131c1a",
-    "font_family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
-    "font_color": "#cbd5e1",
-    "grid_color": "#22312d",
-    "emerald": "#10b981",
-    "mint": "#34d399",
-    "amber": "#f59e0b",
-    "rose": "#f43f5e",
-    "sky": "#0ea5e9",
-    "purple": "#a855f7"
-}
+def get_chart_theme():
+    """Dynamically returns palette based on active Streamlit theme."""
+    theme_base = "dark"
+    try:
+        theme_base = st.get_option("theme.base") or "dark"
+    except Exception:
+        theme_base = "dark"
+
+    if theme_base == "light":
+        return {
+            "paper_bgcolor": "#ffffff",
+            "plot_bgcolor": "#f8fafc",
+            "font_family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
+            "font_color": "#334155",
+            "title_color": "#0f172a",
+            "grid_color": "#e2e8f0",
+            "emerald": "#059669",
+            "mint": "#10b981",
+            "amber": "#d97706",
+            "rose": "#e11d48",
+            "sky": "#0284c7",
+            "purple": "#9333ea"
+        }
+    else:
+        return {
+            "paper_bgcolor": "#131c1a",
+            "plot_bgcolor": "#131c1a",
+            "font_family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
+            "font_color": "#cbd5e1",
+            "title_color": "#f8fafc",
+            "grid_color": "#22312d",
+            "emerald": "#10b981",
+            "mint": "#34d399",
+            "amber": "#f59e0b",
+            "rose": "#f43f5e",
+            "sky": "#0ea5e9",
+            "purple": "#a855f7"
+        }
 
 def style_figure(fig: go.Figure, title: str = "", x_title: str = "", y_title: str = "", height: int = 380) -> go.Figure:
-    """Applies unified enterprise dark-theme styling to any Plotly figure."""
+    """Applies theme-adaptive styling to any Plotly figure."""
+    theme = get_chart_theme()
     fig.update_layout(
         title={
             "text": f"<b>{title}</b>",
-            "font": {"size": 14, "color": "#f8fafc"},
+            "font": {"size": 13.5, "color": theme["title_color"]},
             "x": 0.02,
             "y": 0.95
         },
         height=height,
-        paper_bgcolor=CHART_THEME["paper_bgcolor"],
-        plot_bgcolor=CHART_THEME["plot_bgcolor"],
-        font={"family": CHART_THEME["font_family"], "color": CHART_THEME["font_color"], "size": 11},
-        margin={"l": 50, "r": 30, "t": 55, "b": 45},
+        paper_bgcolor=theme["paper_bgcolor"],
+        plot_bgcolor=theme["plot_bgcolor"],
+        font={"family": theme["font_family"], "color": theme["font_color"], "size": 11},
+        margin={"l": 45, "r": 25, "t": 55, "b": 45},
         legend={
             "orientation": "h",
             "yanchor": "bottom",
             "y": 1.02,
             "xanchor": "right",
             "x": 1.0,
-            "font": {"size": 11, "color": "#94a3b8"}
+            "font": {"size": 10.5, "color": theme["font_color"]}
         },
         hovermode="x unified",
         xaxis={
             "title": x_title,
             "showgrid": True,
-            "gridcolor": CHART_THEME["grid_color"],
+            "gridcolor": theme["grid_color"],
             "gridwidth": 0.8,
             "zeroline": False
         },
         yaxis={
             "title": y_title,
             "showgrid": True,
-            "gridcolor": CHART_THEME["grid_color"],
+            "gridcolor": theme["grid_color"],
             "gridwidth": 0.8,
             "zeroline": False
         }
@@ -64,9 +93,9 @@ def style_figure(fig: go.Figure, title: str = "", x_title: str = "", y_title: st
 
 def plot_actual_vs_expected(df: pd.DataFrame) -> go.Figure:
     """Line & Area comparison of Actual vs Expected Daily Generation."""
+    theme = get_chart_theme()
     fig = go.Figure()
-    
-    # Expected as subtle dashed line
+
     fig.add_trace(go.Scatter(
         x=df["timestamp"],
         y=df["expected_generation_kwh"],
@@ -75,14 +104,13 @@ def plot_actual_vs_expected(df: pd.DataFrame) -> go.Figure:
         hovertemplate="Expected: %{y:,.0f} kWh<extra></extra>"
     ))
 
-    # Actual as glowing emerald line with subtle area
     fig.add_trace(go.Scatter(
         x=df["timestamp"],
         y=df["actual_generation_kwh"],
         name="Actual (kWh)",
         fill="tozeroy",
         fillcolor="rgba(16, 185, 129, 0.12)",
-        line={"color": CHART_THEME["emerald"], "width": 2.2},
+        line={"color": theme["emerald"], "width": 2.2},
         hovertemplate="Actual: %{y:,.0f} kWh<extra></extra>"
     ))
 
@@ -90,6 +118,7 @@ def plot_actual_vs_expected(df: pd.DataFrame) -> go.Figure:
 
 def plot_monthly_generation_trends(df: pd.DataFrame) -> go.Figure:
     """Monthly aggregated bar and shortfall breakdown."""
+    theme = get_chart_theme()
     df_copy = df.copy()
     df_copy["month_year"] = pd.to_datetime(df_copy["timestamp"]).dt.strftime("%Y-%m")
     
@@ -105,14 +134,14 @@ def plot_monthly_generation_trends(df: pd.DataFrame) -> go.Figure:
         x=monthly["month_year"],
         y=monthly["actual_generation_kwh"],
         name="Delivered Generation",
-        marker_color=CHART_THEME["emerald"],
+        marker_color=theme["emerald"],
         hovertemplate="Delivered: %{y:,.0f} kWh<extra></extra>"
     ))
     fig.add_trace(go.Bar(
         x=monthly["month_year"],
         y=monthly["shortfall_kwh"],
         name="Generation Shortfall",
-        marker_color=CHART_THEME["rose"],
+        marker_color=theme["rose"],
         hovertemplate="Shortfall: %{y:,.0f} kWh<extra></extra>"
     ))
 
@@ -121,6 +150,7 @@ def plot_monthly_generation_trends(df: pd.DataFrame) -> go.Figure:
 
 def plot_monthly_revenue(df: pd.DataFrame) -> go.Figure:
     """Monthly financial revenue trend (Export Revenue vs Self-Consumption vs Shortfall)."""
+    theme = get_chart_theme()
     df_copy = df.copy()
     df_copy["month_year"] = pd.to_datetime(df_copy["timestamp"]).dt.strftime("%Y-%m")
     
@@ -135,14 +165,14 @@ def plot_monthly_revenue(df: pd.DataFrame) -> go.Figure:
         x=monthly_rev["month_year"],
         y=monthly_rev["estimated_export_revenue_inr"],
         name="Grid Export Revenue (₹)",
-        marker_color=CHART_THEME["sky"],
+        marker_color=theme["sky"],
         hovertemplate="Export: ₹%{y:,.0f}<extra></extra>"
     ))
     fig.add_trace(go.Bar(
         x=monthly_rev["month_year"],
         y=monthly_rev["estimated_self_revenue_inr"],
         name="Self-Consumption Value (₹)",
-        marker_color=CHART_THEME["mint"],
+        marker_color=theme["mint"],
         hovertemplate="Self-Use: ₹%{y:,.0f}<extra></extra>"
     ))
 
@@ -151,6 +181,7 @@ def plot_monthly_revenue(df: pd.DataFrame) -> go.Figure:
 
 def plot_plant_comparison(df: pd.DataFrame) -> go.Figure:
     """Horizontal bar comparison of plant capacities and efficiency."""
+    theme = get_chart_theme()
     plant_summary = df.groupby(["plant_id", "plant_name"]).agg({
         "actual_generation_kwh": "sum",
         "expected_generation_kwh": "sum",
@@ -165,7 +196,7 @@ def plot_plant_comparison(df: pd.DataFrame) -> go.Figure:
         y=plant_summary["plant_name"],
         orientation="h",
         marker_color=[
-            CHART_THEME["emerald"] if e >= 88 else (CHART_THEME["amber"] if e >= 80 else CHART_THEME["rose"])
+            theme["emerald"] if e >= 88 else (theme["amber"] if e >= 80 else theme["rose"])
             for e in plant_summary["efficiency"]
         ],
         text=[f"{e:.1f}% ({c} MW)" for e, c in zip(plant_summary["efficiency"], plant_summary["capacity_mw"])],
@@ -175,11 +206,64 @@ def plot_plant_comparison(df: pd.DataFrame) -> go.Figure:
 
     return style_figure(fig, "Plant Generation Efficiency Comparison", "Efficiency (%)", "", height=280)
 
-def plot_forecast_with_confidence(hist_df: pd.DataFrame, forecast_df: pd.DataFrame) -> go.Figure:
-    """Historical trail with forecasted values and shaded 95% confidence intervals."""
+def plot_15min_diurnal_curve(df_15m: pd.DataFrame) -> go.Figure:
+    """
+    Sub-daily 15-minute resolution curve:
+    Visualizes morning ramp-up, afternoon peak, evening decline, and DC vs AC power.
+    """
+    theme = get_chart_theme()
+    df_sorted = df_15m.sort_values("timestamp")
+    
+    # Aggregate across inverters if multiple exist
+    curve = df_sorted.groupby("timestamp").agg({
+        "power_kw": "sum",
+        "dc_power_kw": "sum",
+        "irradiance_wm2": "mean",
+        "ac_voltage_v": "mean"
+    }).reset_index()
+
     fig = go.Figure()
 
-    # Last 30 days of historical actuals
+    # DC Power trace (array input)
+    fig.add_trace(go.Scatter(
+        x=curve["timestamp"],
+        y=curve["dc_power_kw"],
+        name="DC String Power (kW)",
+        line={"color": theme["amber"], "width": 1.6, "dash": "dot"},
+        hovertemplate="DC Power: %{y:,.1f} kW<extra></extra>"
+    ))
+
+    # AC Power trace (delivered grid output)
+    fig.add_trace(go.Scatter(
+        x=curve["timestamp"],
+        y=curve["power_kw"],
+        name="AC Inverter Output (kW)",
+        fill="tozeroy",
+        fillcolor="rgba(16, 185, 129, 0.15)",
+        line={"color": theme["emerald"], "width": 2.2},
+        hovertemplate="AC Power: %{y:,.1f} kW<extra></extra>"
+    ))
+
+    return style_figure(fig, "15-Minute Diurnal Generation Profile (Ramp-up, Solar Peak & Decline)", "Time", "Power (kW)", height=340)
+
+def plot_multi_inverter_power(df_15m: pd.DataFrame) -> go.Figure:
+    """Multi-inverter comparison over 15-minute intervals."""
+    theme = get_chart_theme()
+    fig = px.line(
+        df_15m,
+        x="timestamp",
+        y="power_kw",
+        color="inverter_id",
+        title="Multi-Inverter Telemetry Comparison (15-Minute Readings)",
+        color_discrete_sequence=[theme["emerald"], theme["sky"], theme["amber"], theme["purple"], theme["rose"]]
+    )
+    return style_figure(fig, "Inverter-Level Power Telemetry (15-Min)", "Timestamp", "Power (kW)", height=320)
+
+def plot_forecast_with_confidence(hist_df: pd.DataFrame, forecast_df: pd.DataFrame) -> go.Figure:
+    """Historical trail with forecasted values and shaded 95% confidence intervals."""
+    theme = get_chart_theme()
+    fig = go.Figure()
+
     recent_hist = hist_df.sort_values("timestamp").iloc[-30:]
     fig.add_trace(go.Scatter(
         x=recent_hist["timestamp"],
@@ -189,7 +273,6 @@ def plot_forecast_with_confidence(hist_df: pd.DataFrame, forecast_df: pd.DataFra
         hovertemplate="Actual: %{y:,.0f} kWh<extra></extra>"
     ))
 
-    # Upper Bound
     fig.add_trace(go.Scatter(
         x=forecast_df["date"],
         y=forecast_df["upper_bound_kwh"],
@@ -200,7 +283,6 @@ def plot_forecast_with_confidence(hist_df: pd.DataFrame, forecast_df: pd.DataFra
         hoverinfo="skip"
     ))
 
-    # Shaded band + Lower Bound
     fig.add_trace(go.Scatter(
         x=forecast_df["date"],
         y=forecast_df["lower_bound_kwh"],
@@ -212,12 +294,11 @@ def plot_forecast_with_confidence(hist_df: pd.DataFrame, forecast_df: pd.DataFra
         hovertemplate="Lower: %{y:,.0f} kWh<extra></extra>"
     ))
 
-    # Point Forecast
     fig.add_trace(go.Scatter(
         x=forecast_df["date"],
         y=forecast_df["forecast_kwh"],
         name="Forecast (kWh)",
-        line={"color": CHART_THEME["emerald"], "width": 2.5, "dash": "dashdot"},
+        line={"color": theme["emerald"], "width": 2.5, "dash": "dashdot"},
         hovertemplate="Forecast: %{y:,.0f} kWh<extra></extra>"
     ))
 

@@ -1,6 +1,10 @@
 """
 SolarPulse: AI-Powered Solar Energy Analytics & Revenue Intelligence Platform
 Single-Page Unified Executive SaaS Application
+Supports Three-Mode Data Source System:
+1. Explore with Sample Data (SIMULATED)
+2. Upload Your Dataset (UPLOADED)
+3. Connect Your Inverter (API_LIVE)
 """
 
 import os
@@ -30,10 +34,10 @@ load_css()
 # 3. Ensure Database is seeded with sample multi-plant data
 seed_initial_database_if_empty()
 
-# 4. Global Sidebar Scope Filters
-selected_plant, start_date, end_date = render_sidebar()
+# 4. Global Sidebar Scope & Mode Filters
+selected_plant, start_date, end_date, active_mode = render_sidebar()
 
-# 5. Primary Application Navigation Menu (Streamlined Core Modules)
+# 5. Primary Application Navigation Menu
 with st.sidebar:
     st.markdown("---")
     st.markdown("### Platform Modules")
@@ -50,20 +54,20 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
-# 6. Route to Selected Core Module
+# 6. Route to Selected Core Module with Active Data Mode
 if main_module == "⚡ Executive Overview & Performance":
     from modules.overview import render_overview_page
     from modules.performance import render_performance_page
     
     tab1, tab2 = st.tabs(["📊 Executive Portfolio Overview", "📈 Granular Generation & CUF / PR Analytics"])
     with tab1:
-        render_overview_page(selected_plant, start_date, end_date)
+        render_overview_page(selected_plant, start_date, end_date, active_mode=active_mode)
     with tab2:
-        render_performance_page(selected_plant, start_date, end_date)
+        render_performance_page(selected_plant, start_date, end_date, active_mode=active_mode)
 
 elif main_module == "💰 Revenue Intelligence & Financials":
     from modules.revenue import render_revenue_page
-    render_revenue_page(selected_plant, start_date, end_date)
+    render_revenue_page(selected_plant, start_date, end_date, active_mode=active_mode)
 
 elif main_module == "🛡️ Diagnostics, Soiling & Maintenance":
     from modules.loss_detection import render_loss_detection_page
@@ -78,17 +82,17 @@ elif main_module == "🛡️ Diagnostics, Soiling & Maintenance":
         "🔌 GridWatch (Curtailment)"
     ])
     with diag_tab1:
-        render_loss_detection_page(selected_plant, start_date, end_date)
+        render_loss_detection_page(selected_plant, start_date, end_date, active_mode=active_mode)
     with diag_tab2:
-        render_cleansense_page(selected_plant, start_date, end_date)
+        render_cleansense_page(selected_plant, start_date, end_date, active_mode=active_mode)
     with diag_tab3:
-        render_predictcare_page(selected_plant, start_date, end_date)
+        render_predictcare_page(selected_plant, start_date, end_date, active_mode=active_mode)
     with diag_tab4:
-        render_gridwatch_page(selected_plant, start_date, end_date)
+        render_gridwatch_page(selected_plant, start_date, end_date, active_mode=active_mode)
 
 elif main_module == "🔮 SolarCast Generation Forecasting":
     from modules.solarcast import render_solarcast_page
-    render_solarcast_page(selected_plant, start_date, end_date)
+    render_solarcast_page(selected_plant, start_date, end_date, active_mode=active_mode)
 
 elif main_module == "📁 Data Upload, SCADA & Reports":
     from modules.data_management import render_data_management_page
@@ -97,7 +101,7 @@ elif main_module == "📁 Data Upload, SCADA & Reports":
 
     data_tab1, data_tab2, data_tab3 = st.tabs([
         "📥 CSV / Excel Ingestion Center",
-        "⚡ Inverter SCADA Gateway",
+        "🔌 Inverter Gateway Connectors",
         "📑 Certified Reports & Exports"
     ])
     with data_tab1:
@@ -105,4 +109,4 @@ elif main_module == "📁 Data Upload, SCADA & Reports":
     with data_tab2:
         render_api_connectors_page()
     with data_tab3:
-        render_reports_page(selected_plant, start_date, end_date)
+        render_reports_page(selected_plant, start_date, end_date, active_mode=active_mode)

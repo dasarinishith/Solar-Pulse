@@ -1,6 +1,7 @@
 """
 SolarPulse - Module B: Solar Performance Analytics (SolarPulse)
 Detailed generation calculations, efficiency decomposition, PR, CUF, and temporal aggregations.
+Supports active data source filtering (SIMULATED, UPLOADED, API_LIVE).
 """
 
 import streamlit as st
@@ -16,9 +17,10 @@ from core.calculations import (
     calculate_performance_ratio,
     summarize_generation_dataframe
 )
-from components.charts import style_figure, CHART_THEME
+from components.charts import style_figure, get_chart_theme
 
-def render_performance_page(selected_plant: str, start_date, end_date):
+def render_performance_page(selected_plant: str, start_date, end_date, active_mode: str = "SIMULATED"):
+    theme = get_chart_theme()
     st.markdown(
         """
         <div class="sp-header-container">
@@ -35,10 +37,10 @@ def render_performance_page(selected_plant: str, start_date, end_date):
     )
 
     plant_filter = None if selected_plant == "ALL" else selected_plant
-    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date)
+    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source=active_mode)
 
     if df.empty:
-        st.warning("No records found for the selected filters.")
+        st.warning(f"No records found for active mode: **{active_mode}**. Switch mode or upload data to analyze.")
         return
 
     # Add core calculation columns
@@ -51,7 +53,6 @@ def render_performance_page(selected_plant: str, start_date, end_date):
     with col_t1:
         granularity = st.selectbox("Temporal Granularity", options=["Daily", "Weekly", "Monthly", "Annual"], index=0)
 
-    # Prepare aggregated series
     df_agg = df.copy()
     if granularity == "Weekly":
         df_agg["period"] = df_agg["timestamp"].dt.to_period("W").dt.start_time
@@ -92,14 +93,14 @@ def render_performance_page(selected_plant: str, start_date, end_date):
         x=period_data["period"],
         y=period_data["actual_generation_kwh"],
         name="Actual Output (kWh)",
-        marker_color=CHART_THEME["emerald"],
+        marker_color=theme["emerald"],
         hovertemplate="%{x|%Y-%m-%d}<br>Actual: %{y:,.0f} kWh<extra></extra>"
     ))
     fig.add_trace(go.Scatter(
         x=period_data["period"],
         y=period_data["expected_generation_kwh"],
         name="Target Expected (kWh)",
-        line={"color": CHART_THEME["amber"], "width": 2.5, "dash": "dash"},
+        line={"color": theme["amber"], "width": 2.5, "dash": "dash"},
         hovertemplate="%{x|%Y-%m-%d}<br>Target: %{y:,.0f} kWh<extra></extra>"
     ))
 
@@ -117,38 +118,29 @@ def render_performance_page(selected_plant: str, start_date, end_date):
             size="capacity_mw",
             hover_data=["plant_name", "temperature_c"],
             title="Yield vs Solar Irradiance Curve (GHI W/m²)",
-            color_discrete_sequence=[CHART_THEME["emerald"], CHART_THEME["sky"], CHART_THEME["amber"], CHART_THEME["purple"]]
+            color_discrete_sequence=[theme["emerald"], theme["sky"], theme["amber"], theme["purple"]]
         )
-        fig_scatter.update_layout(
-            paper_bgcolor=CHART_THEME["paper_bgcolor"],
-            plot_bgcolor=CHART_THEME["plot_bgcolor"],
-            font={"color": CHART_THEME["font_color"]}
-        )
+        fig_scatter = style_figure(fig_scatter, "Yield vs Solar Irradiance Curve", "Irradiance (W/m²)", "Yield (kWh)", height=320)
         st.plotly_chart(fig_scatter, use_container_width=True)
 
     with c2:
-        # Efficiency Distribution Histogram
         fig_hist = px.histogram(
             df,
             x="generation_efficiency_pct",
             nbins=35,
             title="Generation Efficiency Distribution (%)",
-            color_discrete_sequence=[CHART_THEME["emerald"]]
+            color_discrete_sequence=[theme["emerald"]]
         )
-        fig_hist.update_layout(
-            paper_bgcolor=CHART_THEME["paper_bgcolor"],
-            plot_bgcolor=CHART_THEME["plot_bgcolor"],
-            font={"color": CHART_THEME["font_color"]}
-        )
+        fig_hist = style_figure(fig_hist, "Generation Efficiency Distribution (%)", "Efficiency (%)", "Frequency", height=320)
         st.plotly_chart(fig_hist, use_container_width=True)
 
-    # 5. Tabular Data View with Export
+    # 5. Tabular Data View
     with st.expander("🔍 View Detailed Generation Records Table"):
         st.dataframe(
             df[[
                 "timestamp", "plant_id", "plant_name", "actual_generation_kwh",
                 "expected_generation_kwh", "generation_efficiency_pct", "shortfall_kwh",
-                "temperature_c", "irradiance_wm2", "inverter_status"
+                "temperature_c", "irradiance_wm2", "inverter_status", "data_source"
             ]].sort_values("timestamp", ascending=False),
             use_container_width=True
         )

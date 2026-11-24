@@ -2,6 +2,7 @@
 SolarPulse - Downloadable Analytical Reports
 Allows users to generate and download comprehensive executive PDF reports
 and curated CSV data exports for compliance, investor, and operational reviews.
+Supports active data source filtering (SIMULATED, UPLOADED, API_LIVE).
 """
 
 import streamlit as st
@@ -12,7 +13,7 @@ from core.revenue_engine import RevenueEngine
 from core.anomaly_detection import EquipmentAnomalyDetector
 from components.report_generator import generate_csv_export, generate_executive_pdf_report
 
-def render_reports_page(selected_plant: str, start_date, end_date):
+def render_reports_page(selected_plant: str, start_date, end_date, active_mode: str = "SIMULATED"):
     st.markdown(
         """
         <div class="sp-header-container">
@@ -29,13 +30,12 @@ def render_reports_page(selected_plant: str, start_date, end_date):
     )
 
     plant_filter = None if selected_plant == "ALL" else selected_plant
-    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date)
+    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source=active_mode)
 
     if df.empty:
-        st.warning("No records found for the selected scope.")
+        st.warning(f"No records found for active mode: **{active_mode}**.")
         return
 
-    # Financial & Engineering Summaries
     rev_engine = RevenueEngine()
     df = rev_engine.calculate_revenue_for_dataframe(df)
     gen_summary = summarize_generation_dataframe(df)
@@ -44,7 +44,6 @@ def render_reports_page(selected_plant: str, start_date, end_date):
     detector = EquipmentAnomalyDetector()
     anomalies_df = detector.detect_anomalies(df)
 
-    # Plant-level ranking summary
     plant_rankings = df.groupby(["plant_id", "plant_name"]).agg({
         "capacity_mw": "first",
         "actual_generation_kwh": "sum",
@@ -58,7 +57,7 @@ def render_reports_page(selected_plant: str, start_date, end_date):
         """
         <div class="sp-section-box">
             <div class="sp-section-title">📊 Executive Monthly / Annual Performance Dossier</div>
-            <div style="font-size:0.85rem; color:#94a3b8; line-height:1.5;">
+            <div style="font-size:0.85rem; color:var(--sp-text-secondary); line-height:1.5;">
                 Includes executive KPI cards, generation efficiency benchmarks, revenue monetization breakdowns,
                 asset comparison matrices, and flagged anomaly event logs. Formatted for executive C-suite and investor distribution.
             </div>
@@ -67,9 +66,8 @@ def render_reports_page(selected_plant: str, start_date, end_date):
         unsafe_allow_html=True
     )
 
-    report_title = f"SolarPulse Analytics Report - {selected_plant} ({start_date} to {end_date})"
+    report_title = f"SolarPulse Analytics Report - {selected_plant} ({start_date} to {end_date}) [{active_mode}]"
 
-    # Generate PDF in memory
     try:
         pdf_bytes = generate_executive_pdf_report(
             summary_metrics=gen_summary,
@@ -82,7 +80,7 @@ def render_reports_page(selected_plant: str, start_date, end_date):
         st.download_button(
             label="⬇️ Download Executive PDF Report",
             data=pdf_bytes,
-            file_name=f"SolarPulse_Report_{selected_plant}_{start_date}.pdf",
+            file_name=f"SolarPulse_Report_{selected_plant}_{start_date}_{active_mode}.pdf",
             mime="application/pdf",
             type="primary"
         )
@@ -91,17 +89,7 @@ def render_reports_page(selected_plant: str, start_date, end_date):
 
     st.markdown("---")
 
-    # CSV Data Exports
     st.markdown("### 📥 Granular CSV Analytical Exports")
-    st.markdown(
-        """
-        <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.75rem;">
-            Export raw or calculated time-series data for external modeling in Python, Excel, or PowerBI.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         st.markdown("#### 1. Full Calculated Generation & Revenue Dataset")
@@ -109,7 +97,7 @@ def render_reports_page(selected_plant: str, start_date, end_date):
         st.download_button(
             label="⬇️ Export Generation & Financials (CSV)",
             data=csv_full,
-            file_name=f"solarpulse_generation_{start_date}_to_{end_date}.csv",
+            file_name=f"solarpulse_generation_{start_date}_to_{end_date}_{active_mode}.csv",
             mime="text/csv"
         )
 
@@ -119,6 +107,6 @@ def render_reports_page(selected_plant: str, start_date, end_date):
         st.download_button(
             label="⬇️ Export Flagged Anomalies Log (CSV)",
             data=csv_anom,
-            file_name=f"solarpulse_anomalies_{start_date}_to_{end_date}.csv",
+            file_name=f"solarpulse_anomalies_{start_date}_to_{end_date}_{active_mode}.csv",
             mime="text/csv"
         )
