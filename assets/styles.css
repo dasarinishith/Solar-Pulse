@@ -1,0 +1,233 @@
+/* SolarPulse Enterprise Theme: Renewable Energy Charcoal & Deep Green Aesthetic */
+:root {
+    --bg-primary: #0d1312;
+    --bg-secondary: #131c1a;
+    --bg-card: #182321;
+    --bg-card-hover: #1f2d2a;
+    --border-color: #273834;
+    --border-highlight: #10b981;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-emerald: #10b981;
+    --accent-mint: #34d399;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
+    --accent-sky: #0ea5e9;
+    --gradient-card: linear-gradient(135deg, rgba(24, 35, 33, 0.95) 0%, rgba(19, 28, 26, 0.95) 100%);
+    --gradient-accent: linear-gradient(135deg, #059669 0%, #10b981 100%);
+}
+
+/* Global Container Styling */
+.main .block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 3rem !important;
+    max-width: 96% !important;
+}
+
+/* Header & Banner */
+.sp-header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.75rem;
+    background: linear-gradient(135deg, #111a18 0%, #152420 100%);
+    border: 1px solid #233530;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.sp-header-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sp-header-subtitle {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin-top: 0.25rem;
+}
+
+.sp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sp-badge-simulated {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.sp-badge-live {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.sp-badge-warning {
+    background: rgba(244, 63, 94, 0.15);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+/* KPI Card Grid */
+.sp-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.sp-kpi-card {
+    background: var(--gradient-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.2rem;
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.sp-kpi-card:hover {
+    border-color: #3b534d;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.sp-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--accent-emerald);
+}
+
+.sp-kpi-card.warning::before {
+    background: var(--accent-rose);
+}
+
+.sp-kpi-card.amber::before {
+    background: var(--accent-amber);
+}
+
+.sp-kpi-card.sky::before {
+    background: var(--accent-sky);
+}
+
+.sp-kpi-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.35rem;
+}
+
+.sp-kpi-value {
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.sp-kpi-delta {
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.sp-delta-positive {
+    color: #34d399;
+}
+
+.sp-delta-negative {
+    color: #f87171;
+}
+
+.sp-delta-neutral {
+    color: #94a3b8;
+}
+
+/* Module Section Container */
+.sp-section-box {
+    background: #141f1c;
+    border: 1px solid #233631;
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.sp-section-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sp-section-desc {
+    font-size: 0.825rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+}
+
+/* Custom Table / Alert Box */
+.sp-alert-box {
+    padding: 0.85rem 1.15rem;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sp-alert-critical {
+    background: rgba(244, 63, 94, 0.1);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    color: #fecdd3;
+}
+
+.sp-alert-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fef3c7;
+}
+
+.sp-alert-info {
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    color: #bae6fd;
+}
+
+.sp-alert-success {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #d1fae5;
+}
+
+/* Clean Form inputs & Buttons */
+div[data-testid="stMetricValue"] {
+    font-size: 1.6rem !important;
+}
