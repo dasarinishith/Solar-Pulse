@@ -35,7 +35,12 @@ load_css()
 seed_initial_database_if_empty()
 
 # 4. Global Sidebar Scope & Mode Filters
-selected_plant, start_date, end_date, active_mode = render_sidebar()
+sidebar_res = render_sidebar()
+if len(sidebar_res) == 4:
+    selected_plant, start_date, end_date, active_mode = sidebar_res
+else:
+    selected_plant, start_date, end_date = sidebar_res
+    active_mode = st.session_state.get("data_source_mode", "SIMULATED")
 
 # 5. Primary Application Navigation Menu
 with st.sidebar:
