@@ -127,17 +127,23 @@ def render_data_management_page():
 
             with col_opt2:
                 if summary["is_valid"]:
-                    if st.button("💾 Persist to SolarPulse Database", type="primary", use_container_width=True):
-                        try:
-                            inserted_count = bulk_insert_generation_records(cleaned_df, source="UPLOADED", mode=import_mode)
-                            st.balloons()
-                            st.success(f"🎉 Successfully saved {inserted_count:,} records as UPLOADED dataset!")
-                            
-                            # Switch active mode to UPLOADED
-                            st.session_state["data_source_mode"] = "UPLOADED"
-                            st.info("Switched active view to **UPLOADED** mode. Navigate to Executive Overview to analyze.")
-                        except Exception as e:
-                            st.error(f"Database insertion failed: {str(e)}")
+                    def _do_persist_upload(df_to_save, persistence_mode):
+                        bulk_insert_generation_records(df_to_save, source="UPLOADED", mode=persistence_mode)
+                        st.session_state["data_source_mode"] = "UPLOADED"
+                        st.session_state["upload_persist_success"] = True
+
+                    st.button(
+                        "💾 Persist to SolarPulse Database",
+                        type="primary",
+                        use_container_width=True,
+                        on_click=_do_persist_upload,
+                        args=(cleaned_df, import_mode)
+                    )
+
+                    if st.session_state.pop("upload_persist_success", False):
+                        st.balloons()
+                        st.success("🎉 Successfully saved records as UPLOADED dataset!")
+                        st.info("Switched active view to **UPLOADED** mode. Navigate to Executive Overview to analyze.")
                 else:
                     st.error("Please fix schema validation errors before proceeding.")
 

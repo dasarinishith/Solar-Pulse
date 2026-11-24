@@ -34,6 +34,20 @@
     }
 }
 
+/* Streamlit In-App Light Theme Support */
+[data-theme="light"], [data-base-mode="light"], .stApp[data-theme="light"] {
+    --sp-bg-primary: #f8fafc;
+    --sp-bg-secondary: #f1f5f9;
+    --sp-bg-card: #ffffff;
+    --sp-bg-card-hover: #f8fafc;
+    --sp-border-color: #cbd5e1;
+    --sp-border-highlight: #059669;
+    --sp-text-primary: #0f172a;
+    --sp-text-secondary: #334155;
+    --sp-text-muted: #64748b;
+    --sp-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
 /* Global Container Styling */
 .main .block-container {
     padding-top: 1.75rem !important;

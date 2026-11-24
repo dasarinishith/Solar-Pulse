@@ -51,10 +51,8 @@ def render_sidebar():
             "Select Data Mode",
             options=["SIMULATED", "UPLOADED", "API_LIVE"],
             format_func=lambda x: mode_options[x],
-            index=["SIMULATED", "UPLOADED", "API_LIVE"].index(st.session_state["data_source_mode"]),
-            key="sb_data_source_radio"
+            key="data_source_mode"
         )
-        st.session_state["data_source_mode"] = selected_mode
 
         # Reset / Reload Sample Data Button if in SIMULATED mode
         if selected_mode == "SIMULATED":

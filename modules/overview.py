@@ -29,10 +29,8 @@ from components.charts import (
 )
 
 def set_active_mode(new_mode: str):
-    """Safely updates session state for both radio and active_mode."""
+    """Callback safely updating session state before widget instantiation."""
     st.session_state["data_source_mode"] = new_mode
-    st.session_state["sb_data_source_radio"] = new_mode
-    st.rerun()
 
 def render_overview_page(selected_plant: str, start_date, end_date, active_mode: str = "SIMULATED"):
     # Header Banner
@@ -81,8 +79,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
             unsafe_allow_html=True
         )
         if not is_active:
-            if st.button("Switch to Sample Mode", key="btn_mode_sim", use_container_width=True):
-                set_active_mode("SIMULATED")
+            st.button("Switch to Sample Mode", key="btn_mode_sim", on_click=set_active_mode, args=("SIMULATED",), use_container_width=True)
 
     with c_m2:
         is_active = (active_mode == "UPLOADED")
@@ -104,8 +101,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
             unsafe_allow_html=True
         )
         if not is_active:
-            if st.button("Switch to Upload Mode", key="btn_mode_upload", use_container_width=True):
-                set_active_mode("UPLOADED")
+            st.button("Switch to Upload Mode", key="btn_mode_upload", on_click=set_active_mode, args=("UPLOADED",), use_container_width=True)
 
     with c_m3:
         is_active = (active_mode == "API_LIVE")
@@ -127,8 +123,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
             unsafe_allow_html=True
         )
         if not is_active:
-            if st.button("Configure Inverter Mode", key="btn_mode_api", use_container_width=True):
-                set_active_mode("API_LIVE")
+            st.button("Configure Inverter Mode", key="btn_mode_api", on_click=set_active_mode, args=("API_LIVE",), use_container_width=True)
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
@@ -139,15 +134,16 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
         plant_filter = None if selected_plant == "ALL" else selected_plant
         df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source="UPLOADED")
 
-        # If empty or user wants to upload, show upload tool
-        show_uploader = df.empty
-        if not df.empty:
-            with st.expander("📤 Upload New Spreadsheet / Replace Dataset", expanded=False):
-                _render_inline_uploader()
-        else:
-            st.info("📂 **Upload Your Solar Dataset**: Select a CSV or Excel file below to validate and import your operational data.")
-            _render_inline_uploader()
+        # In Upload Mode, display the CSV/Excel uploader prominently
+        st.markdown("### 📥 Operational Solar Dataset Ingestion")
+        _render_inline_uploader()
+
+        if df.empty:
+            st.info("ℹ️ **No records found in UPLOADED dataset.** Use the upload tool above to upload a CSV or Excel file, or switch to **Sample Data** mode in the cards above.")
             return
+
+        st.markdown("---")
+        st.markdown("### 📊 Ingested Operational Data Analytics")
 
     # ----------------------------------------------------
     # MODE 3: CONNECT INVERTER MODE HANDLING
@@ -388,10 +384,17 @@ def _render_inline_uploader():
 
             with col_p2:
                 if summary["is_valid"]:
-                    if st.button("💾 Save and Load Dashboard", type="primary", use_container_width=True):
-                        inserted = bulk_insert_generation_records(cleaned_df, source="UPLOADED", mode=import_mode)
-                        st.success(f"Saved {inserted:,} records! Loading dashboard...")
-                        set_active_mode("UPLOADED")
+                    def _do_save_upload(df_to_save, mode_to_save):
+                        bulk_insert_generation_records(df_to_save, source="UPLOADED", mode=mode_to_save)
+                        st.session_state["data_source_mode"] = "UPLOADED"
+
+                    st.button(
+                        "💾 Save and Load Dashboard",
+                        type="primary",
+                        use_container_width=True,
+                        on_click=_do_save_upload,
+                        args=(cleaned_df, import_mode)
+                    )
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
 
