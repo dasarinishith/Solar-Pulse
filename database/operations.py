@@ -168,6 +168,19 @@ def get_all_plants():
     finally:
         session.close()
 
+def get_date_range_for_source(source="SIMULATED"):
+    """Returns (min_date, max_date) for the given data_source."""
+    from sqlalchemy import func
+    session = get_db_session()
+    try:
+        min_ts = session.query(func.min(GenerationRecord.timestamp)).filter(GenerationRecord.data_source == source).scalar()
+        max_ts = session.query(func.max(GenerationRecord.timestamp)).filter(GenerationRecord.data_source == source).scalar()
+        if min_ts and max_ts:
+            return min_ts.date(), max_ts.date()
+        return date(2025, 1, 1), date(2025, 12, 31)
+    finally:
+        session.close()
+
 def get_available_data_sources():
     """Returns dictionary of record counts grouped by data_source."""
     session = get_db_session()
@@ -190,6 +203,7 @@ def load_generation_dataframe(
     """
     Loads generation records filtered by plant_id, date range, and strictly by data_source.
     Default loads daily aggregates (is_interval_15m=False).
+    For UPLOADED data, intelligently includes 15m records if no daily aggregates exist.
     """
     session = get_db_session()
     try:
@@ -226,12 +240,27 @@ def load_generation_dataframe(
             query = query.filter(GenerationRecord.data_source == data_source)
 
         if not include_15min:
-            query = query.filter(GenerationRecord.is_interval_15m == False)
+            if data_source == "SIMULATED":
+                query = query.filter(GenerationRecord.is_interval_15m == False)
+            elif data_source == "UPLOADED":
+                # Only filter out 15m if daily records actually exist in UPLOADED
+                has_daily = session.query(GenerationRecord.id).filter(
+                    GenerationRecord.data_source == "UPLOADED",
+                    GenerationRecord.is_interval_15m == False
+                ).first() is not None
+                if has_daily:
+                    query = query.filter(GenerationRecord.is_interval_15m == False)
 
         if plant_ids and "ALL" not in plant_ids:
             if isinstance(plant_ids, str):
                 plant_ids = [plant_ids]
-            query = query.filter(GenerationRecord.plant_id.in_(plant_ids))
+            # Ensure the plant exists in this data source before filtering out
+            matching_plants = [p[0] for p in session.query(GenerationRecord.plant_id).filter(
+                GenerationRecord.data_source == data_source,
+                GenerationRecord.plant_id.in_(plant_ids)
+            ).distinct().all()]
+            if matching_plants:
+                query = query.filter(GenerationRecord.plant_id.in_(matching_plants))
 
         if start_date:
             if isinstance(start_date, (str, date)):

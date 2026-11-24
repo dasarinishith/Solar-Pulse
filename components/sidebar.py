@@ -9,7 +9,12 @@ Provides seamless switching between:
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from database.operations import get_all_plants, get_available_data_sources, reset_and_reload_sample_data
+from database.operations import (
+    get_all_plants,
+    get_available_data_sources,
+    reset_and_reload_sample_data,
+    get_date_range_for_source
+)
 
 def render_sidebar():
     """
@@ -80,14 +85,14 @@ def render_sidebar():
 
         # 3. Reporting Horizon
         st.markdown("### Reporting Horizon")
-        min_date = date(2025, 1, 1)
-        max_date = date(2025, 12, 31)
+        min_date, max_date = get_date_range_for_source(selected_mode)
 
         date_selection = st.date_input(
             "Analysis Horizon",
             value=(min_date, max_date),
             min_value=min_date,
-            max_value=max_date
+            max_value=max_date,
+            key=f"horizon_{selected_mode}"
         )
 
         if isinstance(date_selection, tuple) and len(date_selection) == 2:

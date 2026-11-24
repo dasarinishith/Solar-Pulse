@@ -273,17 +273,25 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
     # Macro Charts
     row1_c1, row1_c2 = st.columns([1.6, 1.0])
     with row1_c1:
-        daily_agg = df.groupby("timestamp").agg({
-            "actual_generation_kwh": "sum",
-            "expected_generation_kwh": "sum"
-        }).reset_index()
+        df_for_daily = df.copy()
+        if "is_interval_15m" in df_for_daily.columns and df_for_daily["is_interval_15m"].any():
+            df_for_daily["day_date"] = pd.to_datetime(df_for_daily["timestamp"]).dt.date
+            daily_agg = df_for_daily.groupby("day_date").agg({
+                "actual_generation_kwh": "sum",
+                "expected_generation_kwh": "sum"
+            }).reset_index().rename(columns={"day_date": "timestamp"})
+        else:
+            daily_agg = df_for_daily.groupby("timestamp").agg({
+                "actual_generation_kwh": "sum",
+                "expected_generation_kwh": "sum"
+            }).reset_index()
         st.plotly_chart(plot_actual_vs_expected(daily_agg), use_container_width=True)
 
     with row1_c2:
         st.plotly_chart(plot_monthly_generation_trends(df), use_container_width=True)
 
     # 15-Minute Sub-Daily Telemetry (for Sample mode or 15m uploads)
-    target_plant_15m = selected_plant if selected_plant != "ALL" else "SP-01"
+    target_plant_15m = selected_plant if selected_plant != "ALL" else (df["plant_id"].iloc[0] if not df.empty else "SP-01")
     df_15m = load_15min_telemetry_dataframe(plant_id=target_plant_15m, data_source=active_mode)
 
     if not df_15m.empty:
