@@ -2,17 +2,22 @@
 SolarPulse - Module A: Main Overview Dashboard
 Supports Three-Mode Data Source System:
 1. Explore with Sample Data (SIMULATED)
-2. Upload Your Dataset (UPLOADED)
-3. Connect Your Inverter (API_LIVE)
-Includes 15-minute diurnal sub-daily curve and multi-inverter telemetry.
+2. Upload Your Dataset (UPLOADED) - with inline ingestion if empty or expandable
+3. Connect Your Inverter (API_LIVE) - with inline gateway configuration & testing
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-from database.operations import load_generation_dataframe, load_15min_telemetry_dataframe, get_all_plants, get_available_data_sources
+from database.operations import (
+    load_generation_dataframe, load_15min_telemetry_dataframe,
+    get_all_plants, get_available_data_sources, bulk_insert_generation_records,
+    get_gateway_configs, save_gateway_config, update_gateway_status
+)
 from core.calculations import summarize_generation_dataframe, calculate_environmental_metrics
 from core.revenue_engine import RevenueEngine
+from core.validation import clean_and_validate_dataset
+from core.api_client import get_connector
 from components.kpi_cards import render_top_kpi_grid
 from components.charts import (
     plot_actual_vs_expected,
@@ -22,6 +27,12 @@ from components.charts import (
     plot_15min_diurnal_curve,
     plot_multi_inverter_power
 )
+
+def set_active_mode(new_mode: str):
+    """Safely updates session state for both radio and active_mode."""
+    st.session_state["data_source_mode"] = new_mode
+    st.session_state["sb_data_source_radio"] = new_mode
+    st.rerun()
 
 def render_overview_page(selected_plant: str, start_date, end_date, active_mode: str = "SIMULATED"):
     # Header Banner
@@ -71,8 +82,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
         )
         if not is_active:
             if st.button("Switch to Sample Mode", key="btn_mode_sim", use_container_width=True):
-                st.session_state["data_source_mode"] = "SIMULATED"
-                st.rerun()
+                set_active_mode("SIMULATED")
 
     with c_m2:
         is_active = (active_mode == "UPLOADED")
@@ -95,8 +105,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
         )
         if not is_active:
             if st.button("Switch to Upload Mode", key="btn_mode_upload", use_container_width=True):
-                st.session_state["data_source_mode"] = "UPLOADED"
-                st.rerun()
+                set_active_mode("UPLOADED")
 
     with c_m3:
         is_active = (active_mode == "API_LIVE")
@@ -119,32 +128,60 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
         )
         if not is_active:
             if st.button("Configure Inverter Mode", key="btn_mode_api", use_container_width=True):
-                st.session_state["data_source_mode"] = "API_LIVE"
-                st.rerun()
+                set_active_mode("API_LIVE")
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-    # 2. Check Data Availability for the active mode
-    plant_filter = None if selected_plant == "ALL" else selected_plant
-    df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source=active_mode)
+    # ----------------------------------------------------
+    # MODE 2: UPLOAD DATA MODE HANDLING
+    # ----------------------------------------------------
+    if active_mode == "UPLOADED":
+        plant_filter = None if selected_plant == "ALL" else selected_plant
+        df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source="UPLOADED")
 
-    if df.empty:
-        if active_mode == "UPLOADED":
-            st.info(
-                "📂 **No uploaded dataset found in SQLite.**\n\n"
-                "Switch to the **Data Upload & Reports** module in the sidebar to upload a CSV or XLSX file."
-            )
-        elif active_mode == "API_LIVE":
-            st.warning(
-                "🔌 **Inverter API Gateway is NOT CONFIGURED.**\n\n"
-                "SolarPulse strictly complies with enterprise policy and does not invent fake live connections.\n"
-                "To connect a live plant, open the **Data Upload & Reports > Inverter SCADA Gateway** tab and enter manufacturer API credentials."
-            )
+        # If empty or user wants to upload, show upload tool
+        show_uploader = df.empty
+        if not df.empty:
+            with st.expander("📤 Upload New Spreadsheet / Replace Dataset", expanded=False):
+                _render_inline_uploader()
         else:
-            st.warning("No records found for the selected scope.")
+            st.info("📂 **Upload Your Solar Dataset**: Select a CSV or Excel file below to validate and import your operational data.")
+            _render_inline_uploader()
+            return
+
+    # ----------------------------------------------------
+    # MODE 3: CONNECT INVERTER MODE HANDLING
+    # ----------------------------------------------------
+    elif active_mode == "API_LIVE":
+        st.markdown(
+            """
+            <div class="sp-section-box">
+                <div class="sp-section-title">🔌 Inverter API Gateway Configuration</div>
+                <div style="font-size:0.85rem; color:var(--sp-text-secondary); line-height:1.5;">
+                    SolarPulse strictly maintains data provenance integrity. If no live inverter credentials are provided,
+                    gateways are displayed as <b>NOT CONFIGURED</b>. No simulated data is ever masqueraded as live readings in this mode.
+                    Enter vendor credentials below to test live gateway connectivity.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        _render_inline_gateway_manager()
         return
 
-    # 3. Enrich with Financials
+    # ----------------------------------------------------
+    # MODE 1: SAMPLE DATA MODE HANDLING
+    # ----------------------------------------------------
+    else:
+        plant_filter = None if selected_plant == "ALL" else selected_plant
+        df = load_generation_dataframe(plant_ids=plant_filter, start_date=start_date, end_date=end_date, data_source="SIMULATED")
+        if df.empty:
+            st.warning("No sample data found. Click 'Reload / Reset Sample Data' in the sidebar.")
+            return
+
+    # ----------------------------------------------------
+    # UNIFIED ANALYTICS RENDERING (Used by both Sample & Uploaded data!)
+    # ----------------------------------------------------
     rev_engine = RevenueEngine()
     df = rev_engine.calculate_revenue_for_dataframe(df)
     gen_summary = summarize_generation_dataframe(df)
@@ -154,7 +191,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
     annual_factor = 365.0 / days_in_period
     est_annual_revenue = fin_summary["total_estimated_revenue_inr"] * annual_factor
 
-    # 4. Render Top KPI Grid
+    # Top KPI Grid
     render_top_kpi_grid(
         total_generation_kwh=gen_summary["total_actual_kwh"],
         avg_daily_kwh=gen_summary["avg_daily_kwh"],
@@ -164,7 +201,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
         shortfall_kwh=gen_summary["total_shortfall_kwh"]
     )
 
-    # 5. Highlights
+    # Highlights
     if len(df["plant_id"].unique()) > 1:
         plant_agg = df.groupby(["plant_id", "plant_name"]).agg({
             "actual_generation_kwh": "sum",
@@ -237,7 +274,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-    # 6. Macro Charts: Actual vs Expected & Monthly Generation
+    # Macro Charts
     row1_c1, row1_c2 = st.columns([1.6, 1.0])
     with row1_c1:
         daily_agg = df.groupby("timestamp").agg({
@@ -249,7 +286,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
     with row1_c2:
         st.plotly_chart(plot_monthly_generation_trends(df), use_container_width=True)
 
-    # 7. Sub-daily 15-Minute Interval Diurnal Section (Required for Sample Mode & 15m uploads)
+    # 15-Minute Sub-Daily Telemetry (for Sample mode or 15m uploads)
     target_plant_15m = selected_plant if selected_plant != "ALL" else "SP-01"
     df_15m = load_15min_telemetry_dataframe(plant_id=target_plant_15m, data_source=active_mode)
 
@@ -272,7 +309,7 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
         with col_15b:
             st.plotly_chart(plot_multi_inverter_power(df_15m), use_container_width=True)
 
-    # 8. Revenue & Asset Contribution
+    # Revenue Breakdown
     row2_c1, row2_c2 = st.columns([1.2, 1.0])
     with row2_c1:
         st.plotly_chart(plot_monthly_revenue(df), use_container_width=True)
@@ -294,16 +331,110 @@ def render_overview_page(selected_plant: str, start_date, end_date, active_mode:
                             <div style="width:{min(100, cuf*4)}%; background:#10b981; height:100%;"></div>
                         </div>
                     </div>
-                    <div style="margin: 1rem 0;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem;">
-                            <span style="color:var(--sp-text-secondary);">Average Performance Ratio (PR)</span>
-                            <span style="font-weight:700; color:#38bdf8;">{min(92.0, gen_summary['overall_efficiency'] * 0.9):.1f}%</span>
-                        </div>
-                        <div style="background:#22312d; border-radius:4px; height:8px; overflow:hidden;">
-                            <div style="width:{min(100, gen_summary['overall_efficiency'] * 0.9)}%; background:#38bdf8; height:100%;"></div>
-                        </div>
-                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
+
+
+# ----------------------------------------------------
+# HELPER FUNCTIONS: INLINE UPLOADER & GATEWAY MANAGER
+# ----------------------------------------------------
+def _render_inline_uploader():
+    """Renders the file uploader and validation directly on the Overview page."""
+    col_u1, col_u2 = st.columns([1.5, 1.0])
+    with col_u1:
+        uploaded_file = st.file_uploader(
+            "Select CSV or Excel Spreadsheet",
+            type=["csv", "xlsx", "xls"],
+            key="overview_inline_uploader",
+            help="Upload a solar generation CSV or Excel file."
+        )
+
+    with col_u2:
+        # Sample template generator
+        sample_template = pd.DataFrame([
+            {
+                "timestamp": "2025-01-01 00:00:00",
+                "plant_id": "SP-01",
+                "plant_name": "Pavagada Solar Park",
+                "inverter_id": "INV-01",
+                "actual_generation_kwh": 215400.0,
+                "expected_generation_kwh": 224000.0,
+                "power_kw": 32000.0,
+                "tariff_inr_per_kwh": 3.25
+            }
+        ])
+        csv_bytes = sample_template.to_csv(index=False).encode("utf-8")
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        st.download_button("⬇️ Download Sample CSV", data=csv_bytes, file_name="solarpulse_template.csv", mime="text/csv", use_container_width=True)
+
+    if uploaded_file is not None:
+        try:
+            raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
+            cleaned_df, summary = clean_and_validate_dataset(raw_df)
+
+            col_a1, col_a2, col_a3, col_a4 = st.columns(4)
+            col_a1.metric("Rows Validated", f"{summary['final_rows']:,}")
+            col_a2.metric("Duplicates Dropped", f"{summary['duplicate_rows_dropped']}")
+            col_a3.metric("Interval Frequency", "15-Minute" if summary.get("is_interval_15m") else "Daily")
+            col_a4.metric("Validation Status", "VALID" if summary["is_valid"] else "INVALID")
+
+            st.dataframe(cleaned_df.head(5), use_container_width=True)
+
+            col_p1, col_p2 = st.columns([1.5, 1.0])
+            with col_p1:
+                import_mode = st.radio("Persistence Mode", options=["APPEND", "REPLACE"], format_func=lambda x: "Append to existing records" if x == "APPEND" else "Replace previous uploaded records", horizontal=True)
+
+            with col_p2:
+                if summary["is_valid"]:
+                    if st.button("💾 Save and Load Dashboard", type="primary", use_container_width=True):
+                        inserted = bulk_insert_generation_records(cleaned_df, source="UPLOADED", mode=import_mode)
+                        st.success(f"Saved {inserted:,} records! Loading dashboard...")
+                        set_active_mode("UPLOADED")
+        except Exception as e:
+            st.error(f"Error processing file: {str(e)}")
+
+
+def _render_inline_gateway_manager():
+    """Renders gateway connection tester and configuration directly on the Overview page."""
+    gw_configs = get_gateway_configs()
+    gw_df = pd.DataFrame(gw_configs)
+
+    st.markdown("#### Registered Gateways")
+    st.dataframe(
+        gw_df[["manufacturer", "plant_id", "site_id", "status", "api_key_masked", "polling_interval_min", "last_polled"]],
+        use_container_width=True
+    )
+
+    st.markdown("#### Test or Configure Inverter Gateway")
+    c1, c2 = st.columns(2)
+    with c1:
+        manufacturer = st.selectbox("Manufacturer", options=["SolarEdge", "SMA", "Fronius", "Sungrow", "Huawei"], key="gw_ov_mfg")
+        all_plants = get_all_plants()
+        plant_id = st.selectbox("Assign to Asset", options=[p["plant_id"] for p in all_plants], key="gw_ov_plt")
+    with c2:
+        site_id = st.text_input("Site / Asset ID", value="SE-SITE-PVG", key="gw_ov_site")
+        api_key = st.text_input("API Key / Bearer Token", type="password", placeholder="Enter manufacturer API token", key="gw_ov_key")
+
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("🧪 Test Connection", type="primary", use_container_width=True):
+            if not api_key:
+                st.warning("⚠️ **NOT CONFIGURED**: Missing API key or bearer token. Enter credentials to test connection.")
+            else:
+                with st.spinner(f"Authenticating with {manufacturer} gateway..."):
+                    connector = get_connector(manufacturer=manufacturer, plant_id=plant_id, site_id=site_id, api_key=api_key)
+                    success, msg = connector.test_connection()
+                    if success:
+                        st.success(f"✅ {msg}")
+                        update_gateway_status(manufacturer, plant_id, "CONNECTED")
+                    else:
+                        st.error(f"❌ {msg}")
+                        update_gateway_status(manufacturer, plant_id, "AUTH_FAILED", last_error=msg)
+    with b2:
+        if st.button("💾 Save Gateway Config", use_container_width=True):
+            status = "CONFIGURED" if api_key else "NOT_CONFIGURED"
+            save_gateway_config(manufacturer=manufacturer, plant_id=plant_id, site_id=site_id, api_key=api_key, status=status)
+            st.success(f"Saved {manufacturer} configuration!")
+            st.rerun()
